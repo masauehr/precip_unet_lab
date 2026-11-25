@@ -40,6 +40,22 @@ def mean_bias(pred: np.ndarray, true: np.ndarray) -> np.ndarray:
     return out
 
 
+def fss(pred: np.ndarray, true: np.ndarray, thr: float, win: int = 9) -> float:
+    """Fractions Skill Score。しきい値以上の画素の割合（窓 win×win 内）で比べる。
+
+    位置が少しずれても、近くに出ていれば点がもらえる指標（1が完全、0が無技能）。全事例をまとめて計算する。
+    """
+    import torch.nn.functional as F
+
+    def frac(a):
+        t = torch.tensor((a >= thr).astype(np.float32))[:, None]
+        return F.avg_pool2d(t, win, stride=1, padding=win // 2, count_include_pad=False)
+
+    pf, of = frac(pred), frac(true)
+    den = (pf**2).mean() + (of**2).mean()
+    return float(1 - ((pf - of) ** 2).mean() / den) if den > 0 else float("nan")
+
+
 def bootstrap_ci(values: np.ndarray, n_boot: int = 2000, seed: int = 0, block: int = 1):
     """平均のブートストラップ 95% 信頼区間。block>1 なら連続 block 件のまとまりで再標本化する。"""
     rng = np.random.default_rng(seed)

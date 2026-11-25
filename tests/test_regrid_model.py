@@ -135,3 +135,24 @@ def test_ガンマ偏差は一致で0():
     y = torch.tensor([[[[2.0, 5.0]]]])
     logit = torch.full_like(y, 20.0)  # 雨ありを確信
     assert float(gamma_deviance_loss(y.clone(), logit, y)) < 1e-6
+
+
+from train import fss
+
+
+def test_UNetのオプションが動く():
+    x = torch.rand(1, 3, 32, 32)
+    for kw in [dict(norm="none"), dict(pool="max"), dict(skip=False), dict(up="nearest"), dict(depth=2), dict(depth=4)]:
+        u = UNet(c_in=3, base=8, **{"depth": 3, **kw}, c_out=3)
+        assert u(x).shape == (1, 3, 32, 32)
+    m = HybridCorrector(base=8, depth=3, skip=False, norm="none")
+    a, p = m(torch.rand(1, 1, 32, 32))
+    assert a.shape == (1, 1, 32, 32)
+
+
+def test_FSSは一致で1_ずれても近ければ高い():
+    t = np.zeros((1, 32, 32)); t[0, 10:14, 10:14] = 5.0
+    assert fss(t, t, 1.0) == pytest.approx(1.0)
+    shifted = np.roll(t, 3, axis=2)
+    far = np.roll(t, 15, axis=2)
+    assert fss(shifted, t, 1.0) > fss(far, t, 1.0)

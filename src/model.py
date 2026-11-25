@@ -21,16 +21,17 @@ def _groups(ch: int, max_groups: int = 8) -> int:
 
 
 class ConvBlock(nn.Module):
-    """(3x3畳み込み → GroupNorm → SiLU) × 2。"""
+    """(3x3畳み込み → 正規化 → SiLU) × 2。norm: "group"（既定）か "none"（アブレーション用）。"""
 
-    def __init__(self, c_in: int, c_out: int):
+    def __init__(self, c_in: int, c_out: int, norm: str = "group"):
         super().__init__()
+        mk = (lambda: nn.GroupNorm(_groups(c_out), c_out)) if norm == "group" else nn.Identity
         self.net = nn.Sequential(
             nn.Conv2d(c_in, c_out, 3, padding=1),
-            nn.GroupNorm(_groups(c_out), c_out),
+            mk(),
             nn.SiLU(),
             nn.Conv2d(c_out, c_out, 3, padding=1),
-            nn.GroupNorm(_groups(c_out), c_out),
+            mk(),
             nn.SiLU(),
         )
 
@@ -41,20 +42,23 @@ class ConvBlock(nn.Module):
 class UNet(nn.Module):
     """入力 (B, c_in, H, W)、H・W は 2**depth で割り切れること。出力 (B, 1, H, W)。"""
 
-    def __init__(self, c_in: int = 1, base: int = 16, depth: int = 3, r_max: float = 3.0, c_out: int = 1):
+    def __init__(self, c_in: int = 1, base: int = 16, depth: int = 3, r_max: float = 3.0, c_out: int = 1,
+                 norm: str = "group", pool: str = "avg", skip: bool = True, up: str = "bilinear"):
+        """norm: group/none、pool: avg/max、skip: スキップ結合の有無、up: bilinear/nearest（アブレーション用）。"""
         super().__init__()
         self.depth = depth
         self.c_out = c_out
         self.r_max = r_max
+        self.pool, self.skip, self.up = pool, skip, up
         chs = [base * 2**i for i in range(depth + 1)]
         self.enc = nn.ModuleList()
         c = c_in
         for ch in chs:
-            self.enc.append(ConvBlock(c, ch))
+            self.enc.append(ConvBlock(c, ch, norm))
             c = ch
         self.dec = nn.ModuleList()
         for i in range(depth, 0, -1):
-            self.dec.append(ConvBlock(chs[i] + chs[i - 1], chs[i - 1]))
+            self.dec.append(ConvBlock(chs[i] + (chs[i - 1] if skip else 0), chs[i - 1], norm))
         self.head = nn.Conv2d(chs[0], c_out, 1)
         nn.init.zeros_(self.head.weight)  # 学習開始時は r=0（ベース場のまま）
         nn.init.zeros_(self.head.bias)
@@ -65,10 +69,14 @@ class UNet(nn.Module):
             x = blk(x)
             if i < self.depth:
                 skips.append(x)
-                x = F.avg_pool2d(x, 2)  # 平均プーリング
+                x = F.avg_pool2d(x, 2) if self.pool == "avg" else F.max_pool2d(x, 2)  # 平均プーリング（既定）
         for blk in self.dec:
-            x = F.interpolate(x, scale_factor=2, mode="bilinear", align_corners=False)
-            x = blk(torch.cat([x, skips.pop()], dim=1))  # スキップ結合
+            if self.up == "bilinear":
+                x = F.interpolate(x, scale_factor=2, mode="bilinear", align_corners=False)
+            else:
+                x = F.interpolate(x, scale_factor=2, mode="nearest")
+            sk = skips.pop()
+            x = blk(torch.cat([x, sk], dim=1) if self.skip else x)  # スキップ結合
         r = self.head(x)
         r0 = self.r_max * torch.tanh(r[:, :1] / self.r_max)  # 補正倍率を exp(±r_max) に制限
         if self.c_out == 1:
@@ -123,11 +131,11 @@ class HybridCorrector(nn.Module):
     """
 
     def __init__(self, base: int = 16, depth: int = 3, additive: bool = True,
-                 neighbor: bool = True, win: int = 17):
+                 neighbor: bool = True, win: int = 17, **unet_kw):
         super().__init__()
         self.additive, self.neighbor, self.win = additive, neighbor, win
         c_in = 3 if neighbor else 1
-        self.unet = UNet(c_in=c_in, base=base, depth=depth, c_out=3 if additive else 2)
+        self.unet = UNet(c_in=c_in, base=base, depth=depth, c_out=3 if additive else 2, **unet_kw)
         if additive:
             with torch.no_grad():
                 self.unet.head.bias[2] = -6.0  # softplus(-6) ≈ 0.0025 mm/h
