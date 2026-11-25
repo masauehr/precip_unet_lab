@@ -38,30 +38,48 @@ def case_index(rng, n: int, block: int = 1) -> np.ndarray:
     return (starts[:, None] + np.arange(block)).ravel()
 
 
-def _gather(parts_seeds, seed_ids, case_idx_per_seed):
+PROB_KEYS = ["bs", "ref", "h", "fa", "ms"]
+PROB_STATS = ["bss", "csi", "fbias"]
+
+
+def prob_stats(p: dict) -> dict:
+    """確率予測の部分和から指標を求める。
+    bs: 事例ごとのブライアスの2乗誤差和、ref: 気候値を確率としたときの同和、h/fa/ms: 二値化後の的中・空振り・見逃し数。
+    """
+    g = lambda k: np.sum(p[k])
+    return dict(
+        bss=float(1 - g("bs") / g("ref")),
+        csi=float(g("h") / max(g("h") + g("fa") + g("ms"), 1)),
+        fbias=float((g("h") + g("fa")) / max(g("h") + g("ms"), 1)),
+    )
+
+
+def _gather(parts_seeds, seed_ids, case_idx_per_seed, keys=KEYS):
     """選んだシード・事例の部分を連結する。"""
     return {
         k: np.concatenate([parts_seeds[s][k][ci] for s, ci in zip(seed_ids, case_idx_per_seed)])
-        for k in KEYS
+        for k in keys
     }
 
 
-def diff_ci(A, B, mode: str = "two_level", n_boot: int = 2000, seed: int = 0, block: int = 1):
+def diff_ci(A, B, mode: str = "two_level", n_boot: int = 2000, seed: int = 0, block: int = 1,
+            keys=KEYS, stats=STATS, stat_fn=stats_from_sums):
     """A−B の各指標の (点推定, 下限, 上限)。A・B は「シードごとの parts の配列」で、同じシード・同じ事例で対。
 
     mode: "cases"（事例のみ）/ "seeds"（シードのみ）/ "two_level"（二段）
     """
     rng = np.random.default_rng(seed)
     S = len(A)
-    n = len(A[0]["rmse"])
-    point = {k: stats_from_sums(_gather(A, range(S), [np.arange(n)] * S))[k]
-             - stats_from_sums(_gather(B, range(S), [np.arange(n)] * S))[k] for k in STATS}
-    draws = {k: np.empty(n_boot) for k in STATS}
+    n = len(A[0][keys[0]])
+    full = [np.arange(n)] * S
+    pa, pb = stat_fn(_gather(A, range(S), full, keys)), stat_fn(_gather(B, range(S), full, keys))
+    point = {k: pa[k] - pb[k] for k in stats}
+    draws = {k: np.empty(n_boot) for k in stats}
     for b in range(n_boot):
         seed_ids = range(S) if mode == "cases" else rng.integers(0, S, size=S)
         cis = [np.arange(n) if mode == "seeds" else case_index(rng, n, block) for _ in range(S)]
-        sa = stats_from_sums(_gather(A, seed_ids, cis))
-        sb = stats_from_sums(_gather(B, seed_ids, cis))
-        for k in STATS:
+        sa = stat_fn(_gather(A, seed_ids, cis, keys))
+        sb = stat_fn(_gather(B, seed_ids, cis, keys))
+        for k in stats:
             draws[k][b] = sa[k] - sb[k]
-    return {k: (point[k], *np.percentile(draws[k], [2.5, 97.5])) for k in STATS}
+    return {k: (point[k], *np.percentile(draws[k], [2.5, 97.5])) for k in stats}

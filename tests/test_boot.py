@@ -54,3 +54,26 @@ def test_シード間のぶれがあると二段の区間は事例のみより�
         B.append(make_parts(rng))
     w = lambda ci: ci["rmse"][2] - ci["rmse"][1]
     assert w(diff_ci(A, B, "two_level", n_boot=400)) > 2 * w(diff_ci(A, B, "cases", n_boot=400))
+
+
+from boot import PROB_KEYS, PROB_STATS, prob_stats
+
+
+def make_prob_parts(rng, n=100, better=0.0):
+    ref = rng.uniform(0.9, 1.1, n)
+    return dict(bs=ref * (0.9 - better), ref=ref, h=rng.integers(5, 10, n).astype(float),
+                fa=rng.integers(5, 10, n).astype(float), ms=rng.integers(5, 10, n).astype(float))
+
+
+def test_確率指標の部分和():
+    p = dict(bs=np.array([0.5]), ref=np.array([1.0]), h=np.array([2.0]), fa=np.array([1.0]), ms=np.array([1.0]))
+    st = prob_stats(p)
+    assert st["bss"] == pytest.approx(0.5) and st["csi"] == pytest.approx(0.5) and st["fbias"] == pytest.approx(1.0)
+
+
+def test_確率指標でも差の区間が使える():
+    rng = np.random.default_rng(3)
+    A = [make_prob_parts(rng, better=0.2) for _ in range(5)]
+    B = [make_prob_parts(rng) for _ in range(5)]
+    ci = diff_ci(A, B, "two_level", n_boot=300, keys=PROB_KEYS, stats=PROB_STATS, stat_fn=prob_stats)
+    assert ci["bss"][1] > 0
