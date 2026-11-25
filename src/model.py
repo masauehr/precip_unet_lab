@@ -111,6 +111,48 @@ class TwoStageCorrector(nn.Module):
         return x_base * torch.exp(out[:, :1]), out[:, 1:]
 
 
+class HybridCorrector(nn.Module):
+    """乗法＋加法のハイブリッド（発生と量を分ける2段）。
+
+    量   : amount = ベース場 × exp(r) ＋ softplus(a)   … 加法の項で、ベース場が0の所にも雨を出せる
+    発生 : p = sigmoid(z)
+    入力 : log(ベース場+ε)。neighbor=True なら、近傍（窓 2*factor+1）の最大と平均の対数も加える
+           （粗い予報が隣のセルにある雨＝位置ずれを拾うため）。
+    加法の項は、学習開始時はほぼ0（バイアス −6）にして、乗法補正から始める。
+    出力チャンネル: [r, z] または [r, z, a]
+    """
+
+    def __init__(self, base: int = 16, depth: int = 3, additive: bool = True,
+                 neighbor: bool = True, win: int = 17):
+        super().__init__()
+        self.additive, self.neighbor, self.win = additive, neighbor, win
+        c_in = 3 if neighbor else 1
+        self.unet = UNet(c_in=c_in, base=base, depth=depth, c_out=3 if additive else 2)
+        if additive:
+            with torch.no_grad():
+                self.unet.head.bias[2] = -6.0  # softplus(-6) ≈ 0.0025 mm/h
+
+    def _features(self, x):
+        feats = [torch.log(x + EPS)]
+        if self.neighbor:
+            pad = self.win // 2
+            mx = F.max_pool2d(x, self.win, stride=1, padding=pad)
+            av = F.avg_pool2d(x, self.win, stride=1, padding=pad, count_include_pad=False)
+            feats += [torch.log(mx + EPS), torch.log(av + EPS)]
+        return torch.cat(feats, dim=1)
+
+    def logits(self, x_base):
+        out = self.unet(self._features(x_base))
+        amount = x_base * torch.exp(out[:, :1])
+        if self.additive:
+            amount = amount + F.softplus(out[:, 2:3])
+        return amount, out[:, 1:2]
+
+    def forward(self, x_base):
+        amount, logit = self.logits(x_base)
+        return amount, torch.sigmoid(logit)
+
+
 WET = 0.1  # この値以上を「雨あり」とみなす [mm/h]
 
 

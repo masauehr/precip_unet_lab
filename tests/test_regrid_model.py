@@ -96,3 +96,24 @@ def test_2段損失は逆伝播できる():
     loss = two_stage_loss(amount, logit, t)
     loss.backward()
     assert torch.isfinite(loss)
+
+
+from model import HybridCorrector
+
+
+def test_ハイブリッドは初期状態でほぼベース場():
+    m = HybridCorrector(base=8, depth=3)
+    x = torch.rand(2, 1, 32, 32) * 5
+    x[:, :, :8] = 0.0
+    amount, p = m(x)
+    assert amount.shape == p.shape == (2, 1, 32, 32)
+    assert torch.allclose(amount, x, atol=0.01)  # 加法の項は初期状態でほぼ0
+    assert (amount[:, :, :8] > 0).all()  # ベース場0でも、加法の項で正の値を出せる
+
+
+def test_ハイブリッドの加法なしは乗法のみ():
+    m = HybridCorrector(base=8, depth=2, additive=False, neighbor=False)
+    x = torch.rand(1, 1, 16, 16) * 5
+    x[:, :, :4] = 0.0
+    amount, _ = m(x)
+    assert (amount[:, :, :4] == 0).all()
