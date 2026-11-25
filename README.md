@@ -29,4 +29,4 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 | [src/train.py](src/train.py) | 学習と評価（基準比較・ブートストラップ） |
 | [PLAN.md](PLAN.md) | 計画と Phase |
 
-状態: Phase 0〜1b 完了（2026-11-25）。
+状態: Phase 0〜1c 完了（2026-11-25）。
