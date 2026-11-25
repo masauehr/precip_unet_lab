@@ -33,4 +33,4 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 | src/phase1*.py, phase2*.py, phase3_*.py | 各Phaseの実験スクリプト |
 | [PLAN.md](PLAN.md) | 計画と Phase |
 
-状態: Phase 0〜4c 完了（2026-11-25）。
+状態: Phase 0〜4c 完了・Phase 5 データ調査済み（2026-11-25）。
