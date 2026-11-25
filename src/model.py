@@ -84,9 +84,17 @@ class MultiplicativeCorrector(nn.Module):
         return x_base * torch.exp(r)  # 乗法的補正（0 は 0 のまま）
 
 
-def log_loss(pred, target):
-    """対数空間の MSE。強雨が損失を支配するのを防ぐ。"""
-    return F.mse_loss(torch.log(pred + EPS), torch.log(target + EPS))
+def log_loss(pred, target, eps: float = EPS):
+    """対数空間の MSE。強雨が損失を支配するのを防ぐ。eps は対数変換の下駄。"""
+    return F.mse_loss(torch.log(pred + eps), torch.log(target + eps))
+
+
+def coarse_total_loss(pred, target, factor: int, eps: float = EPS):
+    """粗い格子ごとの平均を、真値の粗い平均に合わせる（対数空間）。対数損失で総量が落ちるのを抑える。"""
+    return F.mse_loss(
+        torch.log(F.avg_pool2d(pred, factor) + eps),
+        torch.log(F.avg_pool2d(target, factor) + eps),
+    )
 
 
 def conservation_loss(pred, coarse, factor: int):
