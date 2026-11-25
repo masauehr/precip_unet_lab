@@ -1,6 +1,6 @@
 """GSMaP 1時間降水（ガウジ補正 v6）を沖縄周辺で日ごとに取得して保存する（再開可能）。
 
-使い方: ~/projects/jaxa_earth_viewer/.venv/bin/python src/collect_gsmap.py [--start 2025-04-01] [--end 2026-11-18]
+使い方: ~/projects/jaxa_earth_viewer/.venv/bin/python src/collect_gsmap.py [--start 2025-04-01] [--end 2026-05-10]
 保存: data/gsmap/YYYYMMDD.npy  形状 (24, 80, 100) float32、mm/h、時刻は UTC の 0〜23 時（各時の開始）、緯度は北が上。
 範囲: 経度 122〜132E・緯度 22〜30N、0.1°。取得済みの日はスキップ。取得できない日は data/gsmap/missing.txt に記録。
 データは再配布しない。利用時は JAXA のクレジット表記が必要（GSMaP: JAXA/EORC）。
@@ -33,7 +33,7 @@ def fetch_day(d: date) -> np.ndarray:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", default="2025-04-01")
-    ap.add_argument("--end", default="2026-11-18")
+    ap.add_argument("--end", default="2026-05-10")
     ap.add_argument("--retries", type=int, default=3)
     a = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
