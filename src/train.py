@@ -35,7 +35,8 @@ def mean_bias(pred: np.ndarray, true: np.ndarray) -> np.ndarray:
     p, t = pred.mean(axis=(-2, -1)), true.mean(axis=(-2, -1))
     ok = t > 1e-6
     out = np.zeros_like(t)
-    out[ok] = np.log(p[ok] / t[ok])
+    # 予測が全面0の事例で -inf にならないよう下限を置く（1e-3 mm/h）
+    out[ok] = np.log(np.maximum(p[ok], 1e-3) / t[ok])
     return out
 
 

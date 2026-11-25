@@ -74,3 +74,25 @@ def test_再スケールで粗い格子平均が一致():
     coarse = torch.rand(2, 1, 4, 4)
     out = renormalize(pred, coarse, 8)
     assert torch.allclose(torch.nn.functional.avg_pool2d(out, 8), coarse, atol=1e-5)
+
+
+from model import TwoStageCorrector, two_stage_loss
+
+
+def test_2段モデルの形と確率():
+    m = TwoStageCorrector(base=8, depth=3)
+    x = torch.rand(2, 1, 32, 32) * 5
+    amount, p = m(x)
+    assert amount.shape == p.shape == (2, 1, 32, 32)
+    assert ((p > 0) & (p < 1)).all()
+    assert torch.allclose(amount, x)  # 量は初期状態でベース場そのもの
+
+
+def test_2段損失は逆伝播できる():
+    m = TwoStageCorrector(base=8, depth=2)
+    x = torch.rand(2, 1, 16, 16) * 5
+    t = (torch.rand(2, 1, 16, 16) * 3) * (torch.rand(2, 1, 16, 16) > 0.5)
+    amount, logit = m.logits(x)
+    loss = two_stage_loss(amount, logit, t)
+    loss.backward()
+    assert torch.isfinite(loss)

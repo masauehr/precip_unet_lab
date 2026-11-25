@@ -41,9 +41,10 @@ class ConvBlock(nn.Module):
 class UNet(nn.Module):
     """入力 (B, c_in, H, W)、H・W は 2**depth で割り切れること。出力 (B, 1, H, W)。"""
 
-    def __init__(self, c_in: int = 1, base: int = 16, depth: int = 3, r_max: float = 3.0):
+    def __init__(self, c_in: int = 1, base: int = 16, depth: int = 3, r_max: float = 3.0, c_out: int = 1):
         super().__init__()
         self.depth = depth
+        self.c_out = c_out
         self.r_max = r_max
         chs = [base * 2**i for i in range(depth + 1)]
         self.enc = nn.ModuleList()
@@ -54,7 +55,7 @@ class UNet(nn.Module):
         self.dec = nn.ModuleList()
         for i in range(depth, 0, -1):
             self.dec.append(ConvBlock(chs[i] + chs[i - 1], chs[i - 1]))
-        self.head = nn.Conv2d(chs[0], 1, 1)
+        self.head = nn.Conv2d(chs[0], c_out, 1)
         nn.init.zeros_(self.head.weight)  # 学習開始時は r=0（ベース場のまま）
         nn.init.zeros_(self.head.bias)
 
@@ -69,7 +70,10 @@ class UNet(nn.Module):
             x = F.interpolate(x, scale_factor=2, mode="bilinear", align_corners=False)
             x = blk(torch.cat([x, skips.pop()], dim=1))  # スキップ結合
         r = self.head(x)
-        return self.r_max * torch.tanh(r / self.r_max)  # 補正倍率を exp(±r_max) に制限
+        r0 = self.r_max * torch.tanh(r[:, :1] / self.r_max)  # 補正倍率を exp(±r_max) に制限
+        if self.c_out == 1:
+            return r0
+        return torch.cat([r0, r[:, 1:]], dim=1)  # 2ch目以降は制限しない（発生のロジットなど）
 
 
 class MultiplicativeCorrector(nn.Module):
@@ -82,6 +86,41 @@ class MultiplicativeCorrector(nn.Module):
     def forward(self, x_base):
         r = self.unet(torch.log(x_base + EPS))  # 対数空間で残差を推定
         return x_base * torch.exp(r)  # 乗法的補正（0 は 0 のまま）
+
+
+class TwoStageCorrector(nn.Module):
+    """発生の有無と量を分ける2段モデル。
+
+    量   : amount = ベース場 × exp(r)（雨があるときの量。乗法補正）
+    発生 : p = sigmoid(z)（その画素に雨がある確率）
+    出力 : (amount, p)。期待値の予測は amount × p、地図としての予測は amount × (p>0.5)。
+    """
+
+    def __init__(self, base: int = 16, depth: int = 3):
+        super().__init__()
+        self.unet = UNet(c_in=1, base=base, depth=depth, c_out=2)
+
+    def forward(self, x_base):
+        out = self.unet(torch.log(x_base + EPS))
+        amount = x_base * torch.exp(out[:, :1])
+        return amount, torch.sigmoid(out[:, 1:])
+
+    def logits(self, x_base):
+        """BCE 用に、sigmoid 前のロジットを返す。"""
+        out = self.unet(torch.log(x_base + EPS))
+        return x_base * torch.exp(out[:, :1]), out[:, 1:]
+
+
+WET = 0.1  # この値以上を「雨あり」とみなす [mm/h]
+
+
+def two_stage_loss(amount, logit, target, eps: float = EPS):
+    """発生の BCE ＋ 雨のある画素だけの量の対数MSE。"""
+    wet = (target >= WET).float()
+    bce = F.binary_cross_entropy_with_logits(logit, wet)
+    d = (torch.log(amount + eps) - torch.log(target + eps)) ** 2
+    amt = (d * wet).sum() / wet.sum().clamp_min(1.0)
+    return bce + amt
 
 
 def log_loss(pred, target, eps: float = EPS):
