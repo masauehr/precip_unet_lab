@@ -117,3 +117,21 @@ def test_ハイブリッドの加法なしは乗法のみ():
     x[:, :, :4] = 0.0
     amount, _ = m(x)
     assert (amount[:, :, :4] == 0).all()
+
+
+from model import gamma_deviance_loss, tweedie_loss
+
+
+def test_偏差損失は平均で最小になる():
+    # 同じ予測 μ を、分布の揃った真値の標本に当てたとき、損失の最小は標本平均付近（対数MSEは中央値寄り）
+    y = torch.tensor([0.0, 0.0, 0.0, 0.5, 1.0, 20.0]).reshape(1, 1, 2, 3)
+    grid = torch.linspace(0.3, 12.0, 400)
+    loss = torch.stack([tweedie_loss(torch.full_like(y, float(m)), y) for m in grid])
+    best = float(grid[loss.argmin()])
+    assert abs(best - float(y.mean())) < 0.2
+
+
+def test_ガンマ偏差は一致で0():
+    y = torch.tensor([[[[2.0, 5.0]]]])
+    logit = torch.full_like(y, 20.0)  # 雨ありを確信
+    assert float(gamma_deviance_loss(y.clone(), logit, y)) < 1e-6

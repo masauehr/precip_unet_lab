@@ -169,6 +169,30 @@ def two_stage_loss(amount, logit, target, eps: float = EPS, w_strong: float = 0.
     return bce + amt
 
 
+MU_MIN = 0.01  # 偏差損失で予測を割る・平方根を取るときの下限 [mm/h]
+
+
+def gamma_deviance_loss(amount, logit, target):
+    """発生の BCE ＋ 雨のある画素だけの量のガンマ偏差。
+
+    ガンマ偏差 d = y/μ − log(y/μ) − 1 は、予測 μ を**条件付きの平均**に導く（対数MSEは中央値寄り）。
+    """
+    wet = (target >= WET).float()
+    bce = F.binary_cross_entropy_with_logits(logit, wet)
+    mu = amount.clamp_min(MU_MIN)
+    y = target.clamp_min(WET)
+    d = y / mu - torch.log(y / mu) - 1.0
+    return bce + (d * wet).sum() / wet.sum().clamp_min(1.0)
+
+
+def tweedie_loss(mu, target, power: float = 1.5):
+    """Tweedie 偏差（1<power<2）。0 を含む降水に自然で、予測 μ を条件付きの平均に導く。全画素で使う。"""
+    mu = mu.clamp_min(MU_MIN)
+    a, b = 2.0 - power, 1.0 - power
+    d = 2.0 * (target.pow(a) / (b * a) - target * mu.pow(b) / b + mu.pow(a) / a)
+    return d.mean()
+
+
 def log_loss(pred, target, eps: float = EPS):
     """対数空間の MSE。強雨が損失を支配するのを防ぐ。eps は対数変換の下駄。"""
     return F.mse_loss(torch.log(pred + eps), torch.log(target + eps))
