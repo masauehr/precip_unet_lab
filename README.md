@@ -16,6 +16,7 @@ r        = U-Net(log(ベース場 + 0.1))   # 3×3畳み込み・GroupNorm・SiL
 ## 使い方
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/pip install ipykernel nbconvert nbformat   # ノートブックを実行する場合
 .venv/bin/python -m pytest -q tests
 .venv/bin/python src/train.py --epochs 20
 ```
@@ -31,6 +32,8 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 | [src/prob.py](src/prob.py) | 確率の評価（ブライアススキル・ECE・信頼性図・階級別基準） |
 | [src/metrics_ext.py](src/metrics_ext.py) | しきい値別CSI・頻度バイアス・窓別FSS・条件付けの向き別の強雨比・スペクトル |
 | src/phase1*.py, phase2*.py, phase3_*.py | 各Phaseの実験スクリプト |
+| [notebooks/01_手法と用語の解説.ipynb](notebooks/01_手法と用語の解説.ipynb) | **用語と手法の解説ノートブック**（合成データだけで数分。部品の動きを手で確かめる・用語集つき） |
+| src/collect_*.py, split.py, real_*.py | 実データ（GSM×GSMaP）の収集・分割・基準評価 |
 | [PLAN.md](PLAN.md) | 計画と Phase |
 
-状態: Phase 0〜4c 完了・Phase 5 データ調査済み（2026-11-25）。
+状態: Phase 0〜4c 完了・Phase 5 は収集・時刻整合・分割・基準評価まで完了（2026-11-26）。次は実データの補正モデル学習。

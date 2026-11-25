@@ -44,3 +44,14 @@ def test_ブロック数の比は学習7_検証1_テスト2():
     sets, block = make_split(_all_days(110 * 5))
     n = {k: len({block[s] for s in v}) for k, v in sets.items()}
     assert (n["train"], n["val"], n["test"]) == (35, 5, 10)
+
+
+def test_GSMをGSMaP格子に載せても総量が保たれ定数場は定数のまま():
+    import numpy as np
+    from real_data import gsm_on_gsmap
+    one = gsm_on_gsmap(np.ones((2, 81, 81)))
+    assert np.allclose(one, 1.0, atol=1e-5) and one.shape == (2, 80, 100)
+    # 点（1画素）だけの降水量の総量: GSM 側の面積重み付き総量と一致
+    a = np.zeros((1, 81, 81)); a[0, 40, 40] = 1.0
+    out = gsm_on_gsmap(a)
+    assert abs(out.sum() * 0.1 * 0.1 - 0.1 * 0.125) < 1e-6
