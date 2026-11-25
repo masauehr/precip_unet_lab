@@ -161,6 +161,43 @@ class HybridCorrector(nn.Module):
         return amount, torch.sigmoid(logit)
 
 
+PROB_THRS = (1.0, 5.0, 10.0)  # 超過確率を出すしきい値 [mm/h]
+
+
+class ProbCorrector(HybridCorrector):
+    """乗法＋加法のハイブリッドの量（Tweedie）に、複数しきい値の超過確率の頭を加えたモデル。
+
+    出力チャンネル: [r, a, z_1, z_5, z_10]
+      量   : μ = ベース場×exp(r) + softplus(a)   （平均を狙う。Tweedie 偏差で学習）
+      確率 : P(降水 ≥ しきい値) = sigmoid(z_k)    （BCE で学習。しきい値の小さい順に並べて使う）
+    """
+
+    def __init__(self, base: int = 16, depth: int = 3, win: int = 17, thrs=PROB_THRS):
+        nn.Module.__init__(self)
+        self.additive, self.neighbor, self.win, self.thrs = True, True, win, tuple(thrs)
+        self.unet = UNet(c_in=3, base=base, depth=depth, c_out=2 + len(self.thrs))
+        with torch.no_grad():
+            self.unet.head.bias[1] = -6.0  # 加法の項は初期ほぼ0
+
+    def heads(self, x_base):
+        out = self.unet(self._features(x_base))
+        mu = x_base * torch.exp(out[:, :1]) + F.softplus(out[:, 1:2])
+        return mu, out[:, 2:]  # 量, 各しきい値のロジット (B, K, H, W)
+
+    def forward(self, x_base):
+        mu, z = self.heads(x_base)
+        return mu, torch.sigmoid(z)
+
+
+def prob_loss(mu, logits, target, thrs=PROB_THRS, power: float = 1.5):
+    """Tweedie 偏差（量）＋ 各しきい値の BCE（確率）。"""
+    bce = sum(
+        F.binary_cross_entropy_with_logits(logits[:, k : k + 1], (target >= t).float())
+        for k, t in enumerate(thrs)
+    ) / len(thrs)
+    return tweedie_loss(mu, target, power) + bce
+
+
 WET = 0.1  # この値以上を「雨あり」とみなす [mm/h]
 
 

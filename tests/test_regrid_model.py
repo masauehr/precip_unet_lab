@@ -180,3 +180,18 @@ def test_平滑化すると細かい波数のパワーが減る():
     sm = (t + np.roll(t, 1, 1) + np.roll(t, 1, 2) + np.roll(np.roll(t, 1, 1), 1, 2)) / 4
     r = spectrum_ratio(sm, t, bands=((1, 4), (9, 16)))
     assert r[1] < r[0] < 1.01
+
+
+from model import ProbCorrector, prob_loss
+
+
+def test_確率モデルの形と損失():
+    m = ProbCorrector(base=8, depth=2)
+    x = torch.rand(2, 1, 16, 16) * 5
+    mu, p = m(x)
+    assert mu.shape == (2, 1, 16, 16) and p.shape == (2, 3, 16, 16)
+    assert ((p > 0) & (p < 1)).all()
+    t = torch.rand(2, 1, 16, 16) * 12
+    loss = prob_loss(*m.heads(x), t)
+    loss.backward()
+    assert torch.isfinite(loss)
