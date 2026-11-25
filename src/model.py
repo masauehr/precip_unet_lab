@@ -114,12 +114,16 @@ class TwoStageCorrector(nn.Module):
 WET = 0.1  # この値以上を「雨あり」とみなす [mm/h]
 
 
-def two_stage_loss(amount, logit, target, eps: float = EPS):
-    """発生の BCE ＋ 雨のある画素だけの量の対数MSE。"""
+def two_stage_loss(amount, logit, target, eps: float = EPS, w_strong: float = 0.0):
+    """発生の BCE ＋ 雨のある画素だけの量の対数MSE。
+
+    w_strong>0 なら、真値が 5 mm/h 以上の画素の量の誤差に (1+w_strong) 倍の重みを付ける。
+    """
     wet = (target >= WET).float()
     bce = F.binary_cross_entropy_with_logits(logit, wet)
     d = (torch.log(amount + eps) - torch.log(target + eps)) ** 2
-    amt = (d * wet).sum() / wet.sum().clamp_min(1.0)
+    w = wet * (1.0 + w_strong * (target >= 5.0).float())
+    amt = (d * w).sum() / w.sum().clamp_min(1.0)
     return bce + amt
 
 
