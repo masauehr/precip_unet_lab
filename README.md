@@ -28,7 +28,8 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 | [src/model.py](src/model.py) | U-Net・乗法補正・損失・保存制約・再スケール |
 | [src/train.py](src/train.py) | 学習と評価（基準比較・ブートストラップ・FSS） |
 | [src/boot.py](src/boot.py) | 二段ブートストラップ（学習シード×事例・対の差） |
+| [src/metrics_ext.py](src/metrics_ext.py) | しきい値別CSI・頻度バイアス・窓別FSS・条件付けの向き別の強雨比・スペクトル |
 | src/phase1*.py, phase2*.py, phase3_*.py | 各Phaseの実験スクリプト |
 | [PLAN.md](PLAN.md) | 計画と Phase |
 
-状態: Phase 0〜3 完了（2026-11-25）。
+状態: Phase 0〜4 完了（2026-11-25）。

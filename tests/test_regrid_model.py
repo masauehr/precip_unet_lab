@@ -156,3 +156,27 @@ def test_FSSは一致で1_ずれても近ければ高い():
     shifted = np.roll(t, 3, axis=2)
     far = np.roll(t, 15, axis=2)
     assert fss(shifted, t, 1.0) > fss(far, t, 1.0)
+
+
+from metrics_ext import categorical, cond_ratios, fss_window, spectrum_ratio
+
+
+def test_拡張指標の基本性質():
+    t = np.zeros((2, 32, 32)); t[:, 10:14, 10:14] = 6.0
+    c = categorical(t, t, 5.0)
+    assert c["csi"] == 1.0 and c["fbias"] == 1.0
+    assert fss_window(t, t, 5.0, 1) == pytest.approx(1.0)
+    # 位置がずれると、窓が大きいほど FSS は高い
+    s = np.roll(t, 6, axis=2)
+    assert fss_window(s, t, 5.0, 17) > fss_window(s, t, 5.0, 1)
+    # 完全な予測は、どちらの条件付けでも比は0（log 1）
+    a, b = cond_ratios(t, t, 5.0)
+    assert a == pytest.approx(0.0) and b == pytest.approx(0.0)
+
+
+def test_平滑化すると細かい波数のパワーが減る():
+    rng = np.random.default_rng(0)
+    t = rng.random((4, 32, 32))
+    sm = (t + np.roll(t, 1, 1) + np.roll(t, 1, 2) + np.roll(np.roll(t, 1, 1), 1, 2)) / 4
+    r = spectrum_ratio(sm, t, bands=((1, 4), (9, 16)))
+    assert r[1] < r[0] < 1.01
