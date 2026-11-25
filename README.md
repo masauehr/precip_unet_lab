@@ -26,7 +26,9 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 | [src/regrid.py](src/regrid.py) | 保存的再格子化・双線形補間（numpy のみ、割り切れない比も可） |
 | [src/synth.py](src/synth.py) | 合成の真の降水場と、誤差を含む粗い予報 |
 | [src/model.py](src/model.py) | U-Net・乗法補正・損失・保存制約・再スケール |
-| [src/train.py](src/train.py) | 学習と評価（基準比較・ブートストラップ） |
+| [src/train.py](src/train.py) | 学習と評価（基準比較・ブートストラップ・FSS） |
+| [src/boot.py](src/boot.py) | 二段ブートストラップ（学習シード×事例・対の差） |
+| src/phase1*.py, phase2*.py, phase3_*.py | 各Phaseの実験スクリプト |
 | [PLAN.md](PLAN.md) | 計画と Phase |
 
-状態: Phase 0〜2 完了（2026-11-25）。
+状態: Phase 0〜3 完了（2026-11-25）。
