@@ -38,7 +38,7 @@ _WY, _WX = gsm_to_gsmap_matrices()
 
 def gsm_on_gsmap(gsm: np.ndarray) -> np.ndarray:
     """(..., 81, 81) → (..., 80, 100)。"""
-    return np.einsum("ij,...jk,lk->...il", _WY, gsm, _WX).astype(np.float32)
+    return np.matmul(np.matmul(_WY, gsm), _WX.T).astype(np.float32)
 
 
 def load_day(s: str):
