@@ -3,8 +3,10 @@
 固定した最終モデル・QM・τ（outputs/final/）をそのまま使い、設定は変えない。
 GSMaP は 2026-05-11 以降、各日の UTC 0・1 時が配信されない（-99 で欠測扱い）。データは data/gsmap_new/（分割を凍結した本体と分ける）。
 先に時刻整合（lag 相関）を確認してから評価する。ブロックは日付順の10日ごと。
-使い方: .venv/bin/python src/fresh_eval.py
+使い方: .venv/bin/python src/fresh_eval.py [--from YYYYMMDD]
+  --from を付けると、その日以降だけを評価する（まだ評価に使っていない日だけを見る）。新しい GSMaP の再評価手順はマニュアル「新しいGSMaPでの再評価の手順」。
 """
+import argparse
 import sys
 from pathlib import Path
 
@@ -18,9 +20,11 @@ from real_data import gsm_on_gsmap
 D = Path(__file__).resolve().parents[1] / "data"
 
 
-def load_fresh():
+def load_fresh(from_day=None):
     days = []
     for p in sorted((D / "gsmap_new").glob("2*.npy")):
+        if from_day and p.stem < from_day:
+            continue
         if (D / "gsm" / p.name).exists() and not (np.load(p) < -90).all():
             days.append(p.stem)
     gs, gm, bad = [], [], []
@@ -52,7 +56,10 @@ def lag_check(x, y, bad):
 
 
 def main():
-    days, x, y, bad = load_fresh()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--from", dest="from_day", default=None, help="この日（YYYYMMDD）以降だけを評価する")
+    a = ap.parse_args()
+    days, x, y, bad = load_fresh(a.from_day)
     blocks = [i // 10 for i in range(len(days))]
     print(f"新しい期間: {len(days)}日（{days[0]}〜{days[-1]}）・{len(set(blocks))}ブロック")
     lag_check(x, y, bad)
