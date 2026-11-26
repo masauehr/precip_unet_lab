@@ -6,6 +6,7 @@
 データは再配布しない。利用時は JAXA のクレジット表記が必要（GSMaP: JAXA/EORC）。
 """
 import argparse
+import re
 import sys
 import time
 from datetime import date, timedelta
@@ -14,19 +15,23 @@ from pathlib import Path
 import numpy as np
 from jaxa.earth import je
 
-OUT = Path(__file__).resolve().parents[1] / "data" / "gsmap"
+OUT = Path(__file__).resolve().parents[1] / "data" / "gsmap"   # --out で変更可（分割を凍結した本体と分けるため）
 COLLECTION = "JAXA.EORC_GSMaP_standard.Gauge.v6_hourly"
 BBOX = [122, 22, 132, 30]
 
 
 def fetch_day(d: date) -> np.ndarray:
-    """1日分（24時間）を (24, 80, 100) で返す。"""
-    data = je.ImageCollection(collection=COLLECTION, ssl_verify=True) \
+    """1日分（24時間）を (24, 80, 100) で返す。2026-05-11 以降は UTC 0・1 時が配信されておらず、その時は -99（欠測）で埋める。"""
+    coll = je.ImageCollection(collection=COLLECTION, ssl_verify=True) \
         .filter_date(dlim=[f"{d}T00:00:00", f"{d}T23:00:00"]) \
-        .filter_resolution(ppu=10).filter_bounds(bbox=BBOX).select(band="PRECIP").get_images()
-    arr = np.array(je.ImageProcess(data).raster.img, dtype=np.float32)[..., 0]
-    if arr.shape != (24, 80, 100):
-        raise ValueError(f"形状が想定外: {arr.shape}")
+        .filter_resolution(ppu=10).filter_bounds(bbox=BBOX).select(band="PRECIP")
+    hours = [int(re.search(r"/(\d\d)-(\d\d)/catalog", u[0]).group(2)) for u in coll.stac_date.url]
+    data = coll.get_images()
+    got = np.array(je.ImageProcess(data).raster.img, dtype=np.float32)[..., 0]
+    if got.shape != (len(hours), 80, 100) or not 20 <= len(hours) <= 24:
+        raise ValueError(f"形状が想定外: {got.shape}（時 {len(hours)}件）")
+    arr = np.full((24, 80, 100), -99.0, np.float32)
+    arr[hours] = got
     return arr
 
 
@@ -35,7 +40,11 @@ def main():
     ap.add_argument("--start", default="2025-04-01")
     ap.add_argument("--end", default="2026-05-10")
     ap.add_argument("--retries", type=int, default=3)
+    ap.add_argument("--out", default=None, help="保存先（既定は data/gsmap。新しい期間は data/gsmap_new）")
     a = ap.parse_args()
+    global OUT
+    if a.out:
+        OUT = Path(a.out)
     OUT.mkdir(parents=True, exist_ok=True)
     d, end = date.fromisoformat(a.start), date.fromisoformat(a.end)
     n_ok = n_skip = n_ng = 0

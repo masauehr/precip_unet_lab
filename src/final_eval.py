@@ -44,6 +44,14 @@ def main():
     blocks = [block[s] for s in days]
     n = len(days)
     x, y, bad = load_set(days, f"cache_{which}.npz")
+    report(x, y, bad, blocks, which)
+    if not a.dry:
+        mark.write_text("最終評価を実施済み。設定を変えて再評価しない。\n")
+
+
+def report(x, y, bad, blocks, which):
+    """固定した最終モデル・較正で x（GSM）を補正し、y（GSMaP）と比べて表示する。"""
+    n = len(blocks)
     X, Y, BAD = x.numpy()[:, 0], y.numpy()[:, 0], bad.numpy()[:, 0]
     OK = ~BAD
     C = pickle.load(open(OUT / "calib.pkl", "rb"))
@@ -108,8 +116,6 @@ def main():
                   lambda h, fa, ms: fa / max(h + fa, 1), lambda h, fa, ms: (h + fa) / max(h + ms, 1))
             v = [boot(f, blocks, [cc[:, 0], cc[:, 1], cc[:, 2]]) for f in fs]
             print(f"  {nm:<12}" + "  ".join(f"{lab} {u[0]:.3f}[{u[1]:.3f},{u[2]:.3f}]" for lab, u in zip(("CSI", "POD", "FAR", "頻度比"), v)))
-    if not a.dry:
-        mark.write_text("最終評価を実施済み。設定を変えて再評価しない。\n")
 
 
 if __name__ == "__main__":
