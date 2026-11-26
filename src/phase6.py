@@ -26,10 +26,10 @@ OUT = Path(__file__).resolve().parents[1] / "outputs" / "phase6"
 class HybridFT(HybridCorrector):
     """入力 x は (B, 3, H, W) = [ベース場, sin(FT), cos(FT)]。"""
 
-    def __init__(self, base=16, depth=3, **kw):
+    def __init__(self, base=16, depth=3, n_extra=2, **kw):
         super().__init__(base=base, depth=depth, **kw)
         from model import UNet
-        self.unet = UNet(c_in=5, base=base, depth=depth, c_out=3)   # log(ベース) + 近傍2 + sin + cos
+        self.unet = UNet(c_in=3 + n_extra, base=base, depth=depth, c_out=3)   # log(ベース) + 近傍2 + 追加チャンネル
         with torch.no_grad():
             self.unet.head.bias[2] = -6.0
 
@@ -59,10 +59,10 @@ def predict(model, x, bs=64):
     return torch.cat(out)
 
 
-def train(x, y, bad, seed, epochs=10, bs=32, lr=2e-3, log=print):
+def train(x, y, bad, seed, epochs=10, bs=32, lr=2e-3, log=print, model_fn=HybridFT):
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
-    model = HybridFT()
+    model = model_fn()
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     n, H, W = x.shape[0], x.shape[2], x.shape[3]
     ok = (~bad).float()

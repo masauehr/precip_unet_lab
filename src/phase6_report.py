@@ -1,7 +1,7 @@
 """Phase 6 の集計: 予報時間（時刻）を入力に加えたモデル（FT）と、Phase 5b のモデル（基準モデル）を OOF で比べる。
 
 QM なし／あり（Phase 5c と同じ: 他分割の OOF で写像を作る）。シード3つの日別集計を平均して、ブロック単位の対の差（FT − 5b）を出す。
-テスト・新しい期間は使わない。使い方: .venv/bin/python src/phase6_report.py
+テスト・新しい期間は使わない。使い方: .venv/bin/python src/phase6_report.py [6|7]   （6: 時刻入力・7: 前後の時刻入力）
 """
 import sys
 from pathlib import Path
@@ -15,11 +15,15 @@ from phase5a import SHOW, day_sets, paired_ci
 from phase5b import OUT as OUT_B, build
 from phase5c import apply_qm, fit_qm
 from phase6 import OUT as OUT_6
+import phase7
 from real_baseline import metrics
 from real_model import load_set
 from split import make_split
 
 SEEDS = (0, 1, 2)
+VARIANT = sys.argv[1] if len(sys.argv) > 1 else "6"          # "6": 時刻(FT)入力  "7": 前後の時刻入力
+OUT_V = OUT_6 if VARIANT == "6" else phase7.OUT
+TAG = "FT" if VARIANT == "6" else "CTX"
 
 
 def main():
@@ -47,7 +51,7 @@ def main():
         return Q
 
     R = {"基準": stats(X)}
-    for tag, d in (("5b", OUT_B), ("FT", OUT_6)):
+    for tag, d in (("5b", OUT_B), (TAG, OUT_V)):
         raw, q = [], []
         for s in SEEDS:
             P = load(d, "pred", s)
@@ -59,7 +63,7 @@ def main():
     print(f"{'指標':<10}" + "".join(f"{k:>10}" for k in rows))
     for k in SHOW:
         print(f"{k:<10}" + "".join(f"{r[k]:>10.3f}" for r in rows.values()))
-    for a_, b_ in (("FT", "5b"), ("FT+QM", "5b+QM")):
+    for a_, b_ in ((TAG, "5b"), (f"{TAG}+QM", "5b+QM")):
         d = paired_ci(R[a_], R[b_], blocks)
         print(f"\n{a_} − {b_}（ブロック単位の対の差・* は区間が0を含まない）")
         for k in SHOW:
