@@ -1,6 +1,6 @@
 # precip_unet_lab
 
-詳しくは [precip-unet-lab.md](precip-unet-lab.md) を参照。
+詳しくは [precip-unet-lab.md](precip-unet-lab.md) を参照。最終レポートは [REPORT.md](REPORT.md)。
 
 粗い格子の降水量予報を、細かい格子の降水量へ補正する **U-Net**（保存的再格子化 + 対数空間の乗法的補正）を、合成データで学ぶ学習プロジェクト。
 
