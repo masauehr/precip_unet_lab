@@ -36,4 +36,4 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 | src/collect_*.py, split.py, real_*.py | 実データ（GSM×GSMaP）の収集・分割・基準評価 |
 | [PLAN.md](PLAN.md) | 計画と Phase |
 
-状態: Phase 0〜4c 完了・Phase 5 は収集・時刻整合・分割・基準評価まで完了（2026-11-26）。次は実データの補正モデル学習。
+状態: 全 Phase 完了（2026-11-26）。実データの交差検証・最終評価（テスト1回）・新しい期間での再評価・QM更新の検証・探索（Phase 6・7）まで終了。最終レポートは [REPORT.md](REPORT.md)。
